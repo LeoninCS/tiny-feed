@@ -1,0 +1,67 @@
+# 一键启动 MySQL + 后端 + 前端。
+#
+# 用法：
+#   docker compose up -d --build
+#   浏览器打开 http://localhost:8081
+#
+# 端口：
+#   3306  MySQL
+#   8080  后端 API
+#   8081  前端（nginx 反代到后端）
+#
+# 数据：
+#   MySQL 数据落在名为 mysql-data 的 named volume 里，删除容器不会丢。
+#   要彻底重置：docker compose down -v
+#
+# JWT_SECRET 请改成你自己的值，不改的话所有 token 重启后失效。
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: feedsystem
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p123456"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./apps/backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "123456"
+      MYSQL_DATABASE: feedsystem
+      JWT_SECRET: please-change-me
+    ports:
+      - "8080:8080"
+    # 把容器内 ./.run/uploads 持久化到 named volume——之前没挂卷，
+    # 每次 docker compose build / recreate 时上传的视频和封面会全部丢失。
+    volumes:
+      - backend-uploads:/app/.run/uploads
+
+  frontend:
+    build:
+      context: ./apps/frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+volumes:
+  mysql-data:
+  backend-uploads:
