@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors / IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+
+# Node
+node_modules/
+dist/
+*.local
+.vite/
+
+# Go
+*.exe
+*.test
+*.out
+apps/backend/.run/
+apps/backend/bin/
+
+# Frontend build artifacts
+apps/frontend/dist/
+
+# Logs
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local
