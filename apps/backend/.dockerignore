@@ -2,4 +2,8 @@
 .run
 bin
 **/*.log
-
+**/.env
+**/.env.*
+**/.secrets
+**/*.pem
+**/*.key

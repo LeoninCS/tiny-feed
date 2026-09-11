@@ -1,0 +1,139 @@
+/* Shared player affordance also handles mobile browsers blocking audible autoplay. */
+.play-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-height: 48px;
+  white-space: nowrap;
+  background: rgba(12, 16, 23, 0.85);
+  z-index: 2;
+}
+
+@media (max-width: 900px) {
+  #app .dy-shell input:not([type='file']),
+  #app .dy-shell textarea,
+  #app .dy-shell select {
+    font-size: 16px;
+  }
+
+  #app .dy-shell button,
+  #app .dy-shell .chip,
+  #app .dy-shell .pill,
+  #app .dy-shell .dy-btn,
+  #app .dy-shell input:not([type='file']) {
+    min-height: 44px;
+  }
+
+  #app .dy-shell .row > *,
+  #app .dy-shell .grid > *,
+  #app .dy-shell .form-grid > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #app .dy-shell .title,
+  #app .dy-shell .subtle,
+  #app .dy-shell .file-name,
+  #app .dy-shell .author-name {
+    overflow-wrap: anywhere;
+  }
+
+  #app .dy-shell .dy-content.padded,
+  #app .dy-shell .drawer-body {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-block: 16px;
+  }
+
+  #app .dy-shell .tabs {
+    min-height: 52px;
+    gap: 4px;
+    padding-inline: max(8px, env(safe-area-inset-left, 0px)) max(8px, env(safe-area-inset-right, 0px));
+  }
+
+  #app .dy-shell .tab { padding: 8px 10px; font-size: 14px; flex-shrink: 0; }
+  #app .dy-shell .tabs-right { gap: 4px; }
+  #app .dy-shell .tabs-right .chip { padding-inline: 9px; white-space: nowrap; }
+  #app .dy-shell .tabs-right a { display: none; }
+
+  #app .dy-shell .slide,
+  #app .dy-shell .wrap { padding: 0; }
+
+  #app .dy-shell .stage {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #app .dy-shell .stage .video { object-fit: contain; }
+  #app .dy-shell .stage .hint { display: none; }
+  #app .dy-shell .stage .meta {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: 16px;
+    max-width: calc(100% - 92px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  }
+  #app .dy-shell .stage .title,
+  #app .dy-shell .stage .desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  #app .dy-shell .stage .actions {
+    right: max(8px, env(safe-area-inset-right, 0px));
+    bottom: 16px;
+    gap: 8px;
+  }
+  #app .dy-shell .stage .act { width: 52px; padding: 8px 4px; gap: 4px; border-radius: 12px; }
+  #app .dy-shell .stage .icon { font-size: 20px; }
+
+  #app .dy-shell .publish-card { padding: 16px; }
+  #app .dy-shell .form-grid .grid.two { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  #app .dy-shell .file-box { gap: 8px; }
+  #app .dy-shell .file-name { flex: 1 1 120px; }
+  #app .dy-shell .big-btn { width: 100%; min-height: 48px; }
+  #app .dy-shell .login-wrap { padding: 20px 0; }
+  #app .dy-shell .metric { min-width: 0; flex: 1 1 60px; padding: 12px 8px; text-align: center; }
+
+  #app .dy-shell .drawer-backdrop {
+    top: var(--viewport-top, 0px);
+    bottom: auto;
+    height: var(--app-height);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+    align-items: end;
+  }
+  #app .dy-shell .drawer {
+    width: 100%;
+    height: min(78%, 640px);
+    max-height: 100%;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-radius: 18px 18px 0 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    background: rgba(12, 16, 23, 0.98);
+  }
+  #app .dy-shell .drawer-body { min-height: 0; align-content: start; }
+  #app .dy-shell .drawer-x { width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
+  #app .dy-shell .drawer-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #app .dy-shell .drawer-foot textarea { min-height: 64px; max-height: 120px; }
+  #app .dy-shell .drawer-head { padding-block: 8px; }
+
+  #app .dy-shell .toast-wrap {
+    top: calc(var(--viewport-top, 0px) + env(safe-area-inset-top, 0px) + 8px);
+    max-height: calc(var(--app-height) - 24px);
+    overflow: auto;
+  }
+  #app .dy-shell .toast-x { width: 44px; height: 44px; }
+}
+
+@media (max-width: 900px) and (max-height: 500px) {
+  #app .dy-shell .stage .actions { grid-auto-flow: column; align-items: end; }
+  #app .dy-shell .stage .act { width: 44px; }
+  #app .dy-shell .stage .meta { max-width: calc(100% - 230px); bottom: 12px; }
+  #app .dy-shell .stage .desc { display: none; }
+  #app .dy-shell .drawer { height: 100%; }
+  #app .dy-shell .drawer-foot { padding-block: 6px; }
+  #app .dy-shell .drawer-foot textarea { min-height: 44px; height: 44px; }
+}

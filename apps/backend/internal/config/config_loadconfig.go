@@ -96,7 +96,7 @@ func LoadLocalDev(filename string) (Config, bool, error) {
 }
 
 // DefaultLocalConfig 给"找不到配置文件"时兜底用。
-// 默认连本地 MySQL（root/123456/feedsystem）。
+// 默认连接本地 MySQL；密码通过环境变量提供。
 func DefaultLocalConfig() Config {
 	cfg := Config{
 		Server: ServerConfig{
@@ -106,7 +106,7 @@ func DefaultLocalConfig() Config {
 			Host:     "localhost",
 			Port:     3306,
 			User:     "root",
-			Password: "123456",
+			Password: "",
 			DBName:   "feedsystem",
 		},
 	}

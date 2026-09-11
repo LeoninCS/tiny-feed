@@ -21,7 +21,7 @@ const toast = useToastStore()
 
 const { tab, following, currentState, loadFollowing, ensureTabLoaded, loadMoreIfNeeded } = useVideoFeed()
 const scroller = ref<HTMLDivElement | null>(null)
-const { muted, activeIndex, videoMap, setVideoRef, scrollToIndex, onScroll, playActive, toggleMute, togglePlayPause } = useVideoPlayer(scroller)
+const { muted, activeIndex, blockedId, videoMap, setVideoRef, scrollToIndex, onScroll, playActive, toggleMute, togglePlayPause } = useVideoPlayer(scroller)
 
 async function needLogin() {
   toast.error('请先登录')
@@ -123,19 +123,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <section
           v-for="(item, idx) in filteredItems"
           :key="`${tab}-${item.id}`"
-          v-show="idx >= visibleRange.start && idx <= visibleRange.end"
           class="slide"
           :class="{ active: idx === activeIndex }"
         >
           <div class="stage" @click="togglePlayPause(activeItem?.id)" @dblclick.prevent="toggleLike(item)">
             <video
+              v-if="idx >= visibleRange.start && idx <= visibleRange.end"
               class="video"
               :ref="(el) => setVideoRef(item.id, el as HTMLVideoElement | null)"
               :src="item.play_url"
               :poster="item.cover_url"
-              playsinline preload="metadata" loop
+              :muted="muted"
+              playsinline webkit-playsinline preload="metadata" loop
             />
             <div class="grad" />
+            <button v-if="blockedId === item.id" class="play-hint" type="button" @click.stop="togglePlayPause(item.id)">▶ {{ muted ? '点击播放' : '点击有声播放' }}</button>
             <div class="meta">
               <RouterLink class="author-link" :to="`/u/${item.author.id}`" @click.stop>
                 <UserAvatar :username="item.author.username" :id="item.author.id" :size="34" :src="item.author.avatar_url" />
@@ -183,16 +185,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.tabs { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); backdrop-filter: blur(16px); }
+.tabs { min-height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); backdrop-filter: blur(16px); }
 .tab { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.88); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
 .tab.on { border-color: rgba(254,44,85,0.5); background: rgba(254,44,85,0.16); }
 .tabs-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-.scroller { flex: 1; min-height: 0; overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none; }
+.scroller { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scroll-snap-type: y mandatory; scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none; }
 .scroller::-webkit-scrollbar { width: 0; height: 0; }
 .center-hint { height: calc(100% - 60px); display: grid; place-items: center; color: rgba(255,255,255,0.78); }
 .center-hint.bad { color: rgba(254,44,85,0.92); }
-.slide { height: 100%; box-sizing: border-box; scroll-snap-align: start; padding: 18px 14px; display: grid; place-items: center; }
-.stage { width: min(980px, calc(100vw - 28px)); height: calc(100vh - 56px - 52px - 36px); position: relative; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.35); box-shadow: 0 20px 60px rgba(0,0,0,0.55); }
+.slide { height: 100%; box-sizing: border-box; scroll-snap-align: start; scroll-snap-stop: always; padding: 18px 14px; display: grid; place-items: center; }
+.stage { width: min(980px, 100%); height: 100%; min-height: 0; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.35); box-shadow: 0 20px 60px rgba(0,0,0,0.55); }
 .video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: rgba(0,0,0,0.4); }
 .grad { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.68), rgba(0,0,0,0.12) 40%, rgba(0,0,0,0) 70%); pointer-events: none; }
 .meta { position: absolute; left: 16px; bottom: 18px; max-width: min(620px, calc(100% - 96px)); }

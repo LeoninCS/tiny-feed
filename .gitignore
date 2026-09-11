@@ -31,5 +31,13 @@ apps/frontend/dist/
 
 # Env
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+/releases/
+/backups/

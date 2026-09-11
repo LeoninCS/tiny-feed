@@ -14,8 +14,10 @@
 ARG GO_VERSION=1.24.5
 ARG GOPROXY=https://goproxy.cn,direct
 
-FROM golang:${GO_VERSION} AS build
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS build
 ARG GOPROXY
+ARG TARGETOS
+ARG TARGETARCH
 ENV GOPROXY=${GOPROXY} \
     CGO_ENABLED=0
 WORKDIR /src
@@ -30,7 +32,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags="-s -w" -o /out/api ./cmd
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/api ./cmd
 
 # 运行时镜像：alpine 极简底包 + 非 root 账号。
 FROM alpine:3.21

@@ -1,0 +1,50 @@
+{$UPLOAD_SITE_ADDRESS:upload.example.com} {
+	# 该入口只提供文件上传；Caddy 自动申请和续期公网受信任的 HTTPS 证书。
+	header X-Upload-Transport direct
+	log
+
+	@health {
+		method GET
+		path /healthz
+	}
+	handle @health {
+		reverse_proxy backend:8080
+	}
+
+	@upload {
+		path /api/video/uploadVideo /api/video/uploadCover
+		method POST OPTIONS
+	}
+	handle @upload {
+		route {
+			@wrongOrigin {
+				header Origin *
+				not header Origin {$UPLOAD_ALLOWED_ORIGIN:https://example.com}
+			}
+			respond @wrongOrigin "Origin not allowed" 403
+
+			@siteOrigin header Origin {$UPLOAD_ALLOWED_ORIGIN:https://example.com}
+			header @siteOrigin {
+				Access-Control-Allow-Origin {$UPLOAD_ALLOWED_ORIGIN:https://example.com}
+				Access-Control-Allow-Methods "POST, OPTIONS"
+				Access-Control-Allow-Headers "Authorization, Content-Type"
+				Access-Control-Max-Age "600"
+				Vary Origin
+			}
+			@preflight method OPTIONS
+			respond @preflight 204
+
+			# 300 MiB 视频 + multipart 边界；后端仍校验视频/封面各自的大小和类型。
+			request_body {
+				max_size 315621376
+			}
+			uri strip_prefix /api
+			# 直接流式转发到后端；不经过 Cloudflare Tunnel 或前端 Nginx。
+			reverse_proxy backend:8080
+		}
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

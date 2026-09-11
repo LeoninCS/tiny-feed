@@ -1,4 +1,5 @@
 :root {
+  --app-height: 100vh;
   color-scheme: dark;
   --bg: #0e1117;
   --bg-soft: #141922;
@@ -47,9 +48,22 @@
 }
 
 html,
-body {
+body,
+#app {
   height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
+
+@supports (height: 100dvh) {
+  :root { --app-height: 100dvh; }
+}
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
 body {
   margin: 0;
@@ -140,6 +154,8 @@ label {
 input,
 textarea,
 select {
+  min-width: 0;
+  font: inherit;
   width: 100%;
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid var(--border);
@@ -241,7 +257,7 @@ button:disabled {
 
 @media (max-width: 760px) {
   .container {
-    padding: 14px 12px 76px;
+    padding: 14px max(12px, env(safe-area-inset-right, 0px)) 24px max(12px, env(safe-area-inset-left, 0px));
   }
 
   .card {
@@ -251,4 +267,8 @@ button:disabled {
   .row {
     gap: 8px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }

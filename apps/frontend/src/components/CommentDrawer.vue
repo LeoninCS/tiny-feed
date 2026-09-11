@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
 import { ApiError } from '../api/client'
 import * as commentApi from '../api/comment'
@@ -88,6 +88,7 @@ async function deleteComment(commentId: number) {
 }
 
 defineExpose({ loadComments })
+watch(() => props.video?.id, () => { void loadComments() }, { immediate: true })
 </script>
 
 <template>

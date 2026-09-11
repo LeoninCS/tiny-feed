@@ -81,20 +81,21 @@ async function goSettings() {
           <div class="dy-tabs-hint">{{ route.name }}</div>
         </div>
 
-        <div class="dy-search">
-          <input v-model="search" class="dy-search-input" placeholder="搜索标题 / 作者（本地过滤）" @keydown.enter="onSearch" />
-          <button class="dy-btn dy-btn-primary" type="button" @click="onSearch">搜索</button>
-        </div>
+        <form class="dy-search" role="search" @submit.prevent="onSearch">
+          <input v-model="search" class="dy-search-input" type="search" aria-label="搜索标题或作者" placeholder="搜索标题 / 作者" enterkeyhint="search" />
+          <button class="dy-btn dy-btn-primary" type="submit">搜索</button>
+        </form>
 
         <div class="dy-top-right">
           <RouterLink class="dy-btn dy-btn-ghost" to="/video">+ 发布视频</RouterLink>
         </div>
       </header>
 
-      <nav class="dy-mobile-nav">
+      <nav class="dy-mobile-nav" aria-label="主导航">
         <RouterLink class="dy-mobile-link" to="/">推荐</RouterLink>
         <RouterLink class="dy-mobile-link" to="/video">发布</RouterLink>
         <RouterLink class="dy-mobile-link" to="/account">账号</RouterLink>
+        <RouterLink class="dy-mobile-link" to="/settings">设置</RouterLink>
       </nav>
 
       <div class="dy-content" :class="props.full ? 'full' : 'padded'">
@@ -115,9 +116,13 @@ async function goSettings() {
 
 <style scoped>
 .dy-shell {
-  height: 100vh;
+  position: fixed;
+  top: var(--viewport-top, 0px);
+  left: 0;
+  right: 0;
+  height: var(--app-height);
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 232px minmax(0, 1fr);
   background: transparent;
 }
 
@@ -242,13 +247,15 @@ async function goSettings() {
 }
 
 .dy-main {
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
 .dy-topbar {
+  flex-shrink: 0;
   height: 56px;
   border-bottom: 1px solid var(--border);
   background: rgba(12, 16, 23, 0.68);
@@ -269,7 +276,7 @@ async function goSettings() {
 
 .dy-search {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   max-width: 680px;
@@ -323,7 +330,8 @@ async function goSettings() {
   }
   .dy-topbar {
     grid-template-columns: 1fr;
-    padding: 0 10px;
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
   }
   .dy-top-left {
     display: none;
@@ -332,25 +340,28 @@ async function goSettings() {
     display: none;
   }
   .dy-mobile-nav {
-    height: 48px;
+    order: 3;
+    flex-shrink: 0;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: 1fr;
-    border-bottom: 1px solid var(--border);
-    background: rgba(12, 16, 23, 0.74);
+    border-top: 1px solid var(--border);
+    background: rgba(12, 16, 23, 0.98);
     backdrop-filter: blur(18px);
   }
   .dy-mobile-link {
     display: grid;
     place-items: center;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 14px;
     text-decoration: none;
-    border-bottom: 2px solid transparent;
+    border-top: 2px solid transparent;
   }
   .dy-mobile-link.router-link-active {
     color: var(--text);
-    border-bottom-color: var(--primary);
+    border-top-color: var(--primary);
   }
   .dy-search {
     max-width: none;

@@ -8,7 +8,7 @@
 #   docker build -t tiny-feed-frontend .
 # 通过 docker compose 时由 compose 设好 context。
 
-FROM node:24-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /src
 
 # 单独 COPY 依赖清单以便利用构建缓存。
@@ -16,6 +16,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . ./
+ARG VITE_UPLOAD_API_BASE=""
 RUN npm run build
 
 FROM nginx:1.27-alpine

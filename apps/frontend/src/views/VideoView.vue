@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import { ApiError } from '../api/client'
 import * as videoApi from '../api/video'
+import { MAX_VIDEO_SIZE_MB } from '../api/upload-config'
 import type { Video } from '../api/types'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
@@ -15,7 +16,18 @@ const toast = useToastStore()
 
 const busy = ref(false)
 const stage = ref('')
+const uploadPercent = ref(0)
 const published = ref<Video | null>(null)
+const uploadError = ref('')
+const needsLogin = ref(false)
+// 重试封面或发布时，复用当前页面已成功上传的文件，避免重复传大视频。
+let uploadedVideo: { file: File; url: string } | null = null
+let uploadedCover: { file: File; url: string } | null = null
+
+function showError(message: string) {
+  uploadError.value = message
+  toast.error(message)
+}
 
 const videoInput = ref<HTMLInputElement | null>(null)
 const coverInput = ref<HTMLInputElement | null>(null)
@@ -42,8 +54,8 @@ function setPreviewCover(file: File | null) {
   preview.coverUrl = file ? URL.createObjectURL(file) : ''
 }
 
-watch(() => publishForm.video, (f) => setPreviewVideo(f))
-watch(() => publishForm.cover, (f) => setPreviewCover(f))
+watch(() => publishForm.video, (f) => { setPreviewVideo(f); uploadedVideo = null })
+watch(() => publishForm.cover, (f) => { setPreviewCover(f); uploadedCover = null })
 
 onUnmounted(() => {
   setPreviewVideo(null)
@@ -52,12 +64,38 @@ onUnmounted(() => {
 
 function pickVideo(e: Event) {
   const input = e.target as HTMLInputElement
-  publishForm.video = input.files?.[0] ?? null
+  const file = input.files?.[0]
+  if (!file) return
+  if (!/\.(mp4|mov|webm|mkv)$/i.test(file.name)) {
+    showError('请选择 MP4、MOV、WebM 或 MKV 视频')
+    input.value = ''
+    return
+  }
+  if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+    showError(`视频超过 ${MAX_VIDEO_SIZE_MB} MB，请压缩后上传`)
+    input.value = ''
+    return
+  }
+  publishForm.video = file
+  uploadError.value = ''
 }
 
 function pickCover(e: Event) {
   const input = e.target as HTMLInputElement
-  publishForm.cover = input.files?.[0] ?? null
+  const file = input.files?.[0]
+  if (!file) return
+  if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
+    showError('请选择 JPG、PNG 或 WebP 图片；HEIC 照片请先转换为 JPG')
+    input.value = ''
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showError('封面超过 10 MB，请压缩后上传')
+    input.value = ''
+    return
+  }
+  publishForm.cover = file
+  uploadError.value = ''
 }
 
 function openVideoPicker() {
@@ -89,40 +127,47 @@ async function onPublish() {
   const title = publishForm.title.trim()
   const description = publishForm.description.trim()
   if (!title) {
-    toast.error('请输入 title')
+    showError('请输入标题')
     return
   }
   if (!publishForm.video) {
-    toast.error('请选择视频文件（.mp4）')
+    showError('请选择视频文件（MP4、MOV、WebM 或 MKV）')
     return
   }
   if (!publishForm.cover) {
-    toast.error('请选择封面图片（jpg/png/webp）')
+    showError('请选择封面图片（JPG、PNG 或 WebP）')
     return
   }
 
   busy.value = true
+  uploadError.value = ''
+  needsLogin.value = false
   published.value = null
   try {
     stage.value = '上传视频'
-    const videoRes = await videoApi.uploadVideo(publishForm.video)
+    uploadPercent.value = 0
+    if (uploadedVideo?.file !== publishForm.video) {
+      const videoRes = await videoApi.uploadVideo(publishForm.video, (percent) => { uploadPercent.value = percent })
+      const url = videoRes.url || videoRes.play_url || ''
+      if (!url) throw new Error('视频上传成功但未返回文件地址，请重试')
+      uploadedVideo = { file: publishForm.video, url }
+    }
 
     stage.value = '上传封面'
-    const coverRes = await videoApi.uploadCover(publishForm.cover)
-
-    const playUrl = videoRes.url || videoRes.play_url || ''
-    const coverUrl = coverRes.url || coverRes.cover_url || ''
-    if (!coverUrl || !playUrl) {
-      toast.error('上传成功但缺少 url')
-      return
+    uploadPercent.value = 0
+    if (uploadedCover?.file !== publishForm.cover) {
+      const coverRes = await videoApi.uploadCover(publishForm.cover, (percent) => { uploadPercent.value = percent })
+      const url = coverRes.url || coverRes.cover_url || ''
+      if (!url) throw new Error('封面上传成功但未返回文件地址，请重试')
+      uploadedCover = { file: publishForm.cover, url }
     }
 
     stage.value = '发布视频'
     const res = await videoApi.publishVideo({
       title,
       description,
-      play_url: playUrl,
-      cover_url: coverUrl,
+      play_url: uploadedVideo.url,
+      cover_url: uploadedCover.url,
     })
 
     published.value = res
@@ -133,8 +178,9 @@ async function onPublish() {
     clearVideo()
     clearCover()
   } catch (e) {
-    const msg = e instanceof ApiError ? e.message : String(e)
-    toast.error(msg)
+    const msg = e instanceof Error ? e.message : String(e)
+    needsLogin.value = e instanceof ApiError && e.status === 401
+    showError(`${stage.value}失败：${msg}`)
   } finally {
     busy.value = false
     stage.value = ''
@@ -172,7 +218,7 @@ async function onPublish() {
                 ref="videoInput"
                 class="file-native"
                 type="file"
-                accept="video/mp4,video/*"
+                accept="video/*,.mp4,.mov,.webm,.mkv"
                 :disabled="busy"
                 @change="pickVideo"
               />
@@ -184,8 +230,9 @@ async function onPublish() {
                 <button v-if="publishForm.video" type="button" :disabled="busy" @click="clearVideo">清除</button>
               </div>
               <div v-if="publishForm.video" class="subtle" style="margin-top: 6px">
-                已选择：{{ publishForm.video.name }}
+                {{ (publishForm.video.size / 1024 / 1024).toFixed(1) }} MB
               </div>
+              <p class="subtle">最大 {{ MAX_VIDEO_SIZE_MB }} MB；推荐 MP4（H.264），便于 iPhone 和 Android 播放。</p>
             </div>
 
             <div>
@@ -205,7 +252,7 @@ async function onPublish() {
                 <button v-if="publishForm.cover" type="button" :disabled="busy" @click="clearCover">清除</button>
               </div>
               <div v-if="publishForm.cover" class="subtle" style="margin-top: 6px">
-                已选择：{{ publishForm.cover.name }}
+                {{ (publishForm.cover.size / 1024 / 1024).toFixed(1) }} MB
               </div>
             </div>
           </div>
@@ -213,7 +260,7 @@ async function onPublish() {
           <div v-if="preview.coverUrl || preview.videoUrl" class="grid two">
             <div v-if="preview.videoUrl" class="preview-card">
               <div class="subtle">视频预览</div>
-              <video class="video" :src="preview.videoUrl" controls playsinline preload="metadata" />
+              <video class="video" :src="preview.videoUrl" controls playsinline webkit-playsinline preload="metadata" />
             </div>
             <div v-if="preview.coverUrl" class="preview-card">
               <div class="subtle">封面预览</div>
@@ -221,6 +268,16 @@ async function onPublish() {
             </div>
           </div>
 
+          <div v-if="uploadError" class="upload-error" role="alert">
+            <div>{{ uploadError }}</div>
+            <RouterLink v-if="needsLogin" to="/account?redirect=/video">重新登录</RouterLink>
+            <div v-else class="subtle">请检查后再次点击发布；当前页面会保留已选文件。</div>
+          </div>
+          <div v-if="busy" class="upload-status" role="status" aria-live="polite">
+            <div>{{ stage }}{{ stage === '发布视频' ? '…' : ` · ${uploadPercent}%` }}</div>
+            <progress v-if="stage !== '发布视频'" :value="uploadPercent" max="100" :aria-label="stage" />
+            <div class="subtle">{{ uploadPercent === 100 || stage === '发布视频' ? '正在等待服务器确认，请稍候。' : '请保持页面打开，上传完成后会提示。' }}</div>
+          </div>
           <div class="row" style="justify-content: flex-end; margin-top: 8px">
             <button class="primary big-btn" type="button" :disabled="busy" @click="onPublish">发布</button>
           </div>
@@ -246,6 +303,9 @@ async function onPublish() {
 </template>
 
 <style scoped>
+.upload-error { display: grid; gap: 8px; padding: 12px; border: 1px solid #ef6666; border-radius: 10px; overflow-wrap: anywhere; }
+.upload-status { display: grid; gap: 8px; }
+.upload-status progress { width: 100%; height: 8px; accent-color: var(--primary); }
 .publish-wrap {
   display: flex;
   justify-content: center;

@@ -1,0 +1,111 @@
+name: tiny-feed-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    logging: *logging
+    command: ["--innodb-buffer-pool-size=128M", "--max-connections=50"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: feedsystem
+      MYSQL_USER: tinyfeed
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  backend:
+    image: tiny-feed-backend:production
+    build:
+      context: ./apps/backend
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      GIN_MODE: release
+      SERVER_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: tinyfeed
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+      MYSQL_DATABASE: feedsystem
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+    volumes:
+      - backend-uploads:/app/.run/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  frontend:
+    image: tiny-feed-frontend:production
+    build:
+      context: ./apps/frontend
+      args:
+        VITE_UPLOAD_API_BASE: ${VITE_UPLOAD_API_BASE:-}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8081:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - frontend
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/cloudflared_token"]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    secrets:
+      - cloudflared_token
+
+  upload-gateway:
+    image: caddy:2-alpine
+    profiles: ["direct-upload"]
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      UPLOAD_SITE_ADDRESS: ${UPLOAD_SITE_ADDRESS:-upload.example.com}
+      UPLOAD_ALLOWED_ORIGIN: ${UPLOAD_ALLOWED_ORIGIN:-https://example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.upload:/etc/caddy/Caddyfile:ro
+      - upload-caddy-data:/data
+      - upload-caddy-config:/config
+
+secrets:
+  cloudflared_token:
+    file: ./.secrets/cloudflared-token
+
+volumes:
+  mysql-data:
+  backend-uploads:
+  upload-caddy-data:
+  upload-caddy-config:

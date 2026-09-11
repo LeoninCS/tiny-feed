@@ -1,6 +1,7 @@
 # 一键启动 MySQL + 后端 + 前端。
 #
 # 用法：
+#   cp .env.example .env  # 填入独立生成的数据库密码和 JWT 密钥
 #   docker compose up -d --build
 #   浏览器打开 http://localhost:8081
 #
@@ -13,21 +14,21 @@
 #   MySQL 数据落在名为 mysql-data 的 named volume 里，删除容器不会丢。
 #   要彻底重置：docker compose down -v
 #
-# JWT_SECRET 请改成你自己的值，不改的话所有 token 重启后失效。
+# 数据库密码和 JWT_SECRET 必须通过未提交的 .env 或环境变量提供。
 
 services:
   mysql:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: feedsystem
     ports:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p123456"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -43,9 +44,9 @@ services:
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
       MYSQL_USER: root
-      MYSQL_PASSWORD: "123456"
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: feedsystem
-      JWT_SECRET: please-change-me
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
     ports:
       - "8080:8080"
     # 把容器内 ./.run/uploads 持久化到 named volume——之前没挂卷，

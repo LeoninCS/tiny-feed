@@ -18,6 +18,8 @@
 一键起 MySQL + 后端 + 前端：
 
 ```bash
+cp .env.example .env
+# 分别执行两次 openssl rand -hex 32，填入 .env 的数据库密码和 JWT_SECRET。
 docker compose up -d --build
 ```
 
@@ -30,7 +32,7 @@ docker compose up -d --build
 
 要彻底重置数据：`docker compose down -v`。
 
-> `JWT_SECRET` 当前是 `please-change-me` 占位值，生产前请改成你自己的固定值。
+> `.env` 保存本地实际配置，已加入 Git 忽略规则。生产部署使用独立的 `.env.production`，不要复用开发密码。
 
 ---
 
@@ -48,6 +50,8 @@ CREATE DATABASE feedsystem DEFAULT CHARSET utf8mb4;
 
 ```bash
 cd apps/backend
+# 先设置 MYSQL_PASSWORD 为本地数据库密码、JWT_SECRET 为独立生成的密钥。
+# 可保存在此目录的 .env 文件中（不会提交到 Git）。
 go mod download
 go run ./cmd
 ```
@@ -101,6 +105,8 @@ Feed：`/feed/listLatest`、`/feed/listLikesCount`、`/feed/listByTag`，需登�
 ---
 
 ## 部署规格
+
+单服务器 + Cloudflare Tunnel 的生产部署步骤见 [deploy/README.md](deploy/README.md)，生产配置为 `compose.prod.yaml`。
 
 后端是 Go 静态二进制（alpine 镜像），前端是 nginx 静态文件，工作负载很轻；主要资源消耗在 MySQL。
 

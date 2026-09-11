@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
@@ -29,8 +29,9 @@ const state = reactive({
   busy: false,
 })
 
-const muted = ref(true)
+const muted = ref(false)
 const videoEl = ref<HTMLVideoElement | null>(null)
+const playBlocked = ref(false)
 
 const drawer = reactive({
   open: false,
@@ -79,11 +80,12 @@ async function loadIsLiked() {
 
 async function play() {
   if (!videoEl.value) return
+  playBlocked.value = false
   videoEl.value.muted = muted.value
   try {
     await videoEl.value.play()
   } catch {
-    // ignore
+    playBlocked.value = true
   }
 }
 
@@ -96,7 +98,7 @@ function toggleMute() {
 function togglePlayPause() {
   const v = videoEl.value
   if (!v) return
-  if (v.paused) void v.play()
+  if (v.paused) void play()
   else v.pause()
 }
 
@@ -267,6 +269,8 @@ onMounted(async () => {
   await nextTick()
   await play()
 })
+
+onBeforeUnmount(() => videoEl.value?.pause())
 </script>
 
 <template>
@@ -291,11 +295,14 @@ onMounted(async () => {
             class="video"
             :src="state.video.play_url"
             :poster="state.video.cover_url"
+            :muted="muted"
             playsinline
+            webkit-playsinline
             preload="metadata"
             loop
           />
           <div class="grad" />
+          <button v-if="playBlocked" class="play-hint" type="button" @click.stop="play">▶ {{ muted ? '点击播放' : '点击有声播放' }}</button>
 
           <div class="meta">
             <RouterLink class="author-link" :to="`/u/${state.video.author_id}`" @click.stop>
@@ -396,6 +403,7 @@ onMounted(async () => {
 }
 
 .top {
+  flex-shrink: 0;
   height: 52px;
   display: flex;
   align-items: center;
@@ -423,8 +431,9 @@ onMounted(async () => {
 }
 
 .stage {
-  width: min(980px, calc(100vw - 28px));
-  height: calc(100vh - 56px - 52px - 36px);
+  width: min(980px, 100%);
+  height: 100%;
+  min-height: 0;
   position: relative;
   border-radius: 18px;
   overflow: hidden;
@@ -578,11 +587,11 @@ onMounted(async () => {
 
 .drawer {
   width: min(420px, calc(100vw - 18px));
-  height: 100vh;
+  height: var(--app-height);
   background: rgba(12, 16, 23, 0.96);
   border-left: 1px solid rgba(255, 255, 255, 0.12);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .drawer-head {
@@ -685,17 +694,13 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
-  .stage {
-    width: calc(100vw - 28px);
-    height: calc(100vh - 56px - 52px - 36px);
-  }
   .drawer-backdrop {
     justify-items: center;
     align-items: end;
   }
   .drawer {
     width: calc(100vw - 16px);
-    height: min(72vh, 560px);
+    height: min(78vh, 640px);
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px 18px 0 0;
