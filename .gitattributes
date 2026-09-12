@@ -1,0 +1,2 @@
+# Exclude frontend sources from GitHub language statistics.
+apps/frontend/** -linguist-detectable
