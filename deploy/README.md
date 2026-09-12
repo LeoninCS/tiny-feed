@@ -4,7 +4,28 @@
 生产配置是仓库根目录的 `compose.prod.yaml`，Compose 项目名固定为 `tiny-feed-prod`。
 MySQL 和后端只在容器网络内通信；前端映射到服务器回环地址 `127.0.0.1:8081` 供排查。
 Cloudflare Tunnel 通过出站连接提供 HTTPS 入口，无需开放服务器的入站 80/443。
-启用下文的独立上传入口后，只有网站页面和业务接口继续走 Tunnel；视频/封面文件通过 `upload.example.com` 的 HTTPS 入口直连服务器。
+启用下文的独立上传入口后，视频/封面的上传通过 `upload.example.com` 的 HTTPS 入口直连服务器；网站页面、业务接口和媒体播放仍走 Tunnel。
+
+## 可选整站 HTTP 直连入口
+
+仅在明确接受明文传输时启用。HTTP 不加密登录凭证或文件内容；使用 IP 不代替云服务商要求的备案、接入或访问授权。必须从 `http://203.0.113.10/` 打开整个网站，不能让 HTTPS 页面调用 HTTP 上传地址。
+
+在 `.env.production` 中设置 `DIRECT_HTTP_HOST=203.0.113.10`（只填 IP，不含协议），放通服务器 TCP 80，然后执行：
+
+```bash
+docker compose --env-file .env.production -f compose.prod.yaml --profile direct-http build frontend-http
+docker compose --env-file .env.production -f compose.prod.yaml --profile direct-http up -d --no-deps frontend-http
+docker compose --env-file .env.production -f compose.prod.yaml --profile direct-http up -d --no-deps upload-gateway
+curl --fail http://203.0.113.10/healthz
+```
+
+需要先启动 MySQL 和后端。网关已有环境变量变化时，上面的命令会重建网关容器，应避开在途上传。仅修改 Caddyfile 时，可以用 `docker compose --env-file .env.production -f compose.prod.yaml exec -T upload-gateway caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` 平滑加载。
+
+`frontend-http` 使用独立镜像 `tiny-feed-frontend:direct-http`，构建时固定 `VITE_UPLOAD_API_BASE=/api`，不受 HTTPS 上传地址影响。页面、登录、上传、封面和视频均走 IP 同源；API 和 `/static/` 由 Caddy 直接转发到后端，支持媒体 Range 分段读取。文件上限仍为视频 300 MiB、封面 10 MiB，原 HTTPS 前端使用自己的镜像。
+
+IP 地址与原域名不共享浏览器登录状态，需要在 HTTP 入口重新登录。启用前检查健康接口、登录、真实上传和媒体分段响应；如果 IP 也返回云平台阻断页面，需先处理云平台限制，不能仅凭 DNS 或端口连通认定入口可用。
+
+停用时先把 `DIRECT_HTTP_HOST` 改回 `localhost` 并更新网关，再停止 `frontend-http`。默认只匹配 localhost，不启用公网 HTTP 站点。
 
 ## 独立 HTTPS 上传入口
 
@@ -151,6 +172,8 @@ QA_BROWSER=chromium node deploy/tests/upload-regression.cjs
 
 再用 `QA_BROWSER=webkit` 运行。可通过 `QA_PLAYWRIGHT_PATH` 指定 Playwright 模块位置、`PLAYWRIGHT_BROWSERS_PATH` 指定浏览器安装位置、`QA_ARTIFACT_DIR` 保存失败提示截图。测试完成后移除仅供测试的容器和数据。
 
-直连回归时，在隔离环境添加 `upload-gateway` 服务，挂载 `deploy/Caddyfile.upload`，设置 `UPLOAD_SITE_ADDRESS=http://:80`、`UPLOAD_ALLOWED_ORIGIN=http://127.0.0.1:18082`，仅绑定 `127.0.0.1:18083:80`。测试前端以 `VITE_UPLOAD_API_BASE=http://127.0.0.1:18083/api` 构建，再给脚本增加 `QA_UPLOAD_ORIGIN=http://127.0.0.1:18083`。脚本额外检查跨域预检、未登录上传返回 401、其他来源/业务路由被拒绝，以及所有文件请求确实走独立入口。本机 HTTP 配置只用于隔离测试，生产始终使用 HTTPS。
+直连回归时，在隔离环境添加 `upload-gateway` 服务，挂载 `deploy/Caddyfile.upload`，设置 `UPLOAD_SITE_ADDRESS=http://:80`、`UPLOAD_ALLOWED_ORIGIN=http://127.0.0.1:18082`，仅绑定 `127.0.0.1:18083:80`。测试前端以 `VITE_UPLOAD_API_BASE=http://127.0.0.1:18083/api` 构建，再给脚本增加 `QA_UPLOAD_ORIGIN=http://127.0.0.1:18083`。脚本额外检查跨域预检、未登录上传返回 401、其他来源/业务路由被拒绝，以及所有文件请求确实走独立入口。本机 HTTP 配置只用于隔离测试；HTTPS 主站使用的独立上传入口仍须提供 HTTPS。
+
+整站 HTTP 回归：测试容器使用 `frontend-http` 服务名和对应镜像，网关设置 `DIRECT_HTTP_HOST=127.0.0.1`、`UPLOAD_SITE_ADDRESS=http://upload.localhost`，仅映射 `127.0.0.1:18083:80`。给脚本设置 `QA_BASE_URL=http://127.0.0.1:18083`、`QA_UPLOAD_ORIGIN=http://127.0.0.1:18083` 和 `QA_VERIFY_MEDIA=1`，另保持上述测试数据库与视频文件参数。除了上传回归，还验证首页/详情媒体同源、默认有声播放和拖动进度，以及 HEAD、Range、If-Range、尾部范围和无效范围响应。
 
 只有静态前端改动时，可先加载新版镜像，再将新哈希资源复制进运行容器，最后原子替换 `index.html`；保留旧哈希资源供已打开的页面使用。这样无需重启 Nginx，不会因更新中断在途上传。需同时同步源代码与镜像，确保后续重建使用同一版本。

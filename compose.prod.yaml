@@ -67,6 +67,20 @@ services:
     ports:
       - "127.0.0.1:8081:80"
 
+  frontend-http:
+    # 独立构建同源入口，避免 HTTP 页面仍向 HTTPS 上传域名发送文件。
+    image: tiny-feed-frontend:direct-http
+    profiles: ["direct-http"]
+    build:
+      context: ./apps/frontend
+      args:
+        VITE_UPLOAD_API_BASE: /api
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      backend:
+        condition: service_healthy
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     profiles: ["tunnel"]
@@ -83,7 +97,7 @@ services:
 
   upload-gateway:
     image: caddy:2-alpine
-    profiles: ["direct-upload"]
+    profiles: ["direct-upload", "direct-http"]
     restart: unless-stopped
     logging: *logging
     depends_on:
@@ -92,6 +106,7 @@ services:
     environment:
       UPLOAD_SITE_ADDRESS: ${UPLOAD_SITE_ADDRESS:-upload.example.com}
       UPLOAD_ALLOWED_ORIGIN: ${UPLOAD_ALLOWED_ORIGIN:-https://example.com}
+      DIRECT_HTTP_HOST: ${DIRECT_HTTP_HOST:-localhost}
     ports:
       - "80:80"
       - "443:443"

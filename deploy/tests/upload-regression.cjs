@@ -23,8 +23,10 @@ function expiredToken(account) {
  const page = await context.newPage();
  const requests = {video:0,cover:0,publish:0,refresh:[]};
  const uploadHosts = new Set();
+ const mediaHosts = new Set();
  page.on('request',r=>{if(r.url().endsWith('/video/uploadVideo'))requests.video++;if(r.url().endsWith('/video/uploadCover'))requests.cover++;if(r.url().endsWith('/video/publish'))requests.publish++;});
  page.on('request',r=>{if(/\/video\/upload(Video|Cover)$/.test(r.url()) && r.method()==='POST')uploadHosts.add(new URL(r.url()).origin);});
+ page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/static/'))mediaHosts.add(new URL(r.url()).origin);});
  page.on('response',r=>{if(r.url().endsWith('/account/refresh'))requests.refresh.push(r.status());});
  const credentials={username:'local_qa_'+crypto.randomBytes(7).toString('hex'),password:crypto.randomBytes(20).toString('hex')};
  try {
@@ -58,8 +60,41 @@ function expiredToken(account) {
    await page.getByRole('link',{name:'去播放'}).waitFor();
    const stored=await context.request.get(origin+video.play_url);
    assert.equal(stored.status(),200);assert.deepEqual(await stored.body(),clip);
+   return video;
   }
-  await select('普通手机视频');await publish();console.log(kind,'PASS real video + cover + publish + byte-for-byte stored file');
+  await select('普通手机视频');const firstVideo=await publish();console.log(kind,'PASS real video + cover + publish + byte-for-byte stored file');
+  if (process.env.QA_VERIFY_MEDIA === '1') {
+   const health=await context.request.get(origin+'/healthz',{maxRedirects:0});
+   assert.equal(health.status(),200);assert.equal(health.headers()['x-media-transport'],'direct');
+   const mediaUrl=new URL(firstVideo.play_url,origin).href;
+   const head=await context.request.head(mediaUrl);
+   assert.equal(head.status(),200);assert.equal(Number(head.headers()['content-length']),clip.length);
+   assert.equal(head.headers()['accept-ranges'],'bytes');assert.equal(head.headers()['x-media-transport'],'direct');
+   const part=await context.request.get(mediaUrl,{headers:{Range:'bytes=1024-2047','If-Range':head.headers()['last-modified']}});
+   assert.equal(part.status(),206);assert.equal(part.headers()['content-range'],`bytes 1024-2047/${clip.length}`);
+   assert.deepEqual(await part.body(),clip.subarray(1024,2048));
+   const tail=await context.request.get(mediaUrl,{headers:{Range:'bytes=-1024'}});
+   assert.equal(tail.status(),206);assert.deepEqual(await tail.body(),clip.subarray(-1024));
+   const invalid=await context.request.get(mediaUrl,{headers:{Range:`bytes=${clip.length}-`}});
+   assert.equal(invalid.status(),416);
+   await page.getByRole('link',{name:'去播放'}).click();
+   await page.waitForFunction(()=>{const v=document.querySelector('video');return v?.readyState>=2});
+   const videoEl=page.locator('video');
+   assert.equal(await videoEl.evaluate(v=>v.muted),false,'default playback must remain audible');
+   assert.equal(new URL(await videoEl.evaluate(v=>v.currentSrc)).origin,origin);
+   if(await videoEl.evaluate(v=>v.paused)){
+    const hint=page.getByRole('button',{name:'点击有声播放'});
+    if(await hint.isVisible())await hint.click();else await videoEl.click();
+   }
+   await page.waitForFunction(()=>document.querySelector('video')?.currentTime>0.2);
+   await videoEl.evaluate(v=>{v.currentTime=Math.min(3,v.duration/2)});
+   await page.waitForFunction(()=>{const v=document.querySelector('video');return !v.seeking && v.currentTime>=Math.min(3,v.duration/2)});
+   await page.goto(origin+'/');
+   await page.waitForFunction(()=>document.querySelector('video')?.readyState>=2);
+   assert.equal(await page.locator('video').first().evaluate(v=>v.muted),false);
+   assert.deepEqual([...mediaHosts],[origin],'feed, detail, video and covers must stay on the direct HTTP origin');
+   console.log(kind,'PASS direct HTTP health, HEAD, Range, If-Range, suffix, invalid range, audible playback and seek');
+  }
   for(let i=0;i<2;i++){
    await page.evaluate(token=>localStorage.setItem('access_token',token),expiredToken(account));
    await select('续期测试'+i);

@@ -48,3 +48,39 @@
 		respond "Not found" 404
 	}
 }
+
+# 只有显式设置 DIRECT_HTTP_HOST 并启动 frontend-http 后才提供公网 HTTP 入口。
+# HTTP 页面、API 和媒体同源，浏览器无需发起混合内容或跨域请求。
+http://{$DIRECT_HTTP_HOST:localhost} {
+	header X-Media-Transport direct
+	log {
+		format filter {
+			# 自定义续期请求头不属于 Caddy 默认屏蔽的凭证头。
+			request>headers>X-Refresh-Token delete
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+		}
+	}
+
+	@health path /healthz
+	handle @health {
+		reverse_proxy backend:8080
+	}
+
+	handle_path /api/* {
+		# 300 MiB 视频 + multipart 边界；后端保留鉴权、类型和大小校验。
+		request_body {
+			max_size 315621376
+		}
+		reverse_proxy backend:8080
+	}
+
+	handle /static/* {
+		# 不缓冲响应，透传 Range / If-Range，支持首帧加载和拖动播放。
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy frontend-http:80
+	}
+}
